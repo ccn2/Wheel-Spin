@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wheel Spinner</title>
+<style>
+:root{--size:640px;}
+html,body{margin:0;height:100%;font-family:Arial,sans-serif;background:#f2f5f8;color:#111;}
+#title{position:absolute;top:12px;left:12px;font-size:20px;font-weight:700;}
+#result{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:#fff;padding:12px 20px;border-radius:10px;font-size:18px;font-weight:700;box-shadow:0 4px 18px rgba(0,0,0,0.1);}
+#app{display:flex;height:100vh;flex-direction:row;}
+#left{flex:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;position:relative;}
+#right{flex:1;border-left:1px solid #e0e6eb;padding:18px;background:#fff;display:flex;flex-direction:column;gap:10px;position:relative;}
+.wheel-wrap{position:relative;width:var(--size);height:var(--size);}
+#wheel{width:100%;height:100%;border-radius:50%;box-shadow:0 6px 18px rgba(20,30,40,0.08),inset 0 2px 6px rgba(255,255,255,0.4);}
+#pointer {
+  position: absolute;
+  top: 50%;
+  right: -18px;
+  transform: translateY(-50%) rotate(180deg); /* rotate 180 degrees */
+  width: 0;
+  height: 0;
+  border-top: 16px solid transparent;
+  border-bottom: 16px solid transparent;
+  border-left: 24px solid #ffcc00; /* golden yellow */
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3));
+  z-index: 30;
+}
+
+
+.label{position:absolute;left:50%;top:50%;transform-origin:0 0;pointer-events:none;user-select:none;white-space:nowrap;}
+.label span{display:inline-block;transform-origin:0 0;font-weight:600;}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;margin-top:6px;}
+button{background:#0b79ff;color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600;}
+button.secondary{background:#fff;color:#0b79ff;border:1px solid #d6e7ff;}
+textarea{width:100%;min-height:240px;resize:vertical;padding:10px;border:1px solid #e6eef8;border-radius:8px;font-size:14px;font-family:inherit;}
+#sliceCount{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);font-size:14px;font-weight:600;color:#111;}
+.genre-buttons{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.genre-buttons button{padding:4px 8px;font-size:13px;}
+@media (max-width:800px){:root{--size:480px;}#wheel{width:var(--size);height:var(--size);}#pointer{font-size:24px;}.label span{font-size:10px;}#sliceCount{font-size:12px;}}
+@media (max-width:500px){:root{--size:320px;}}
+</style>
+</head>
+<body>
+<div id="title">🎡 Wheel Spinner</div>
+<div id="result">No spin yet</div>
+<div id="app">
+  <div id="left">
+    <div class="wheel-wrap">
+  <div id="wheel"></div>
+  <div id="pointer"></div>
+</div>
+
+    <div class="controls">
+      <button id="spinBtn">Spin</button>
+      <button id="plus" class="secondary">+</button>
+      <button id="minus" class="secondary">-</button>
+      <button id="randomMovies" class="secondary">Random Movies</button>
+      <button id="clearBtn" class="secondary">Clear</button>
+    </div>
+  </div>
+  <div id="right">
+  <textarea id="itemsInput" placeholder="Add items manually, one per line"></textarea>
+  <div class="genre-buttons">
+    <button data-genre="action">Action</button>
+    <button data-genre="comedy">Comedy</button>
+    <button data-genre="sci-fi">Sci-Fi</button>
+    <button data-genre="horror">Horror</button>
+    <button data-genre="thriller">Thriller</button>
+  </div>
+  
+  <div id="sliceCount">Slices: 0</div>
+</div>
+
+</div>
+<script>
+const wheel=document.getElementById('wheel');
+const resultDiv=document.getElementById('result');
+const textarea=document.getElementById('itemsInput');
+const plusBtn=document.getElementById('plus');
+const minusBtn=document.getElementById('minus');
+const spinBtn=document.getElementById('spinBtn');
+const randomBtn=document.getElementById('randomMovies');
+const clearBtn=document.getElementById('clearBtn');
+const genreBtns=document.querySelectorAll('.genre-buttons button');
+
+let items=[];
+let currentRotation=0;
+let spinning=false;
+
+const movieDB={
+  'action':['Die Hard','Mad Max','Gladiator','Avengers','Inception','Terminator 2','John Wick','Black Panther','Iron Man','Captain America','Wonder Woman','Batman Begins','Spider-Man','Thor','Guardians of the Galaxy','Logan','The Dark Knight','Rogue One','The Matrix Reloaded','Mission Impossible'],
+  'comedy':['Superbad','Step Brothers','The Mask','Anchorman','The Hangover','Dumb and Dumber','Airplane','Groundhog Day','Shaun of the Dead','Zoolander','21 Jump Street','Tropic Thunder','Ferris Bueller','Mean Girls','Ghostbusters','Big','Elf','Coming to America','Hot Fuzz','Jumanji'],
+  'sci-fi':['Interstellar','Matrix','Blade Runner','Arrival','Inception','Star Wars','E.T.','Back to the Future','Avatar','The Martian','The Fifth Element','District 9','Looper','Gravity','Edge of Tomorrow','Ex Machina','Minority Report','Ready Player One','Mad Max: Fury Road','Solaris'],
+  'horror':['The Shining','Get Out','It','Halloween','A Quiet Place','Hereditary','A Nightmare on Elm Street','The Exorcist','The Conjuring','Insidious','Sinister','Scream','Paranormal Activity','The Ring','Candyman','The Witch','Midsommar','Saw','28 Days Later','Host'],
+  'thriller':['Se7en','Joker','Gone Girl','Memento','Fight Club','The Silence of the Lambs','Shutter Island','Prisoners','Oldboy','Zodiac','Nightcrawler','No Country for Old Men','Inception','Catch Me If You Can','The Prestige','The Game','Mystic River','Heat','Collateral','Drive']
+};
+
+// generate visually distinct colors with varying saturation/lightness
+function generateDistinctColors(n){
+    const colors=[];
+    for(let i=0;i<n;i++){
+        const hue = (i * 360 / n) % 360;
+        const sat = 60 + (i*10)%20;
+        const light = 45 + (i*5)%20;
+        colors.push(`hsl(${hue},${sat}%,${light}%)`);
+    }
+    return colors;
+}
+
+function generateSliceColors(total){
+    return generateDistinctColors(total);
+}
+
+function colorFor(i,total){
+    const colors = generateSliceColors(total);
+    return colors[i];
+}
+
+function renderWheel(){
+  wheel.innerHTML='';
+  if(!items.length){
+    wheel.style.background='#f0f4f8';
+    document.getElementById('sliceCount').textContent='Slices: 0';
+    return;
+  }
+
+  const sliceAngle=360/items.length;
+  const parts=[];
+  for(let i=0;i<items.length;i++){
+    parts.push(`${colorFor(i,items.length)} ${i*sliceAngle}deg ${(i+1)*sliceAngle}deg`);
+  }
+  wheel.style.background=`conic-gradient(from -90deg, ${parts.join(',')})`;
+  document.getElementById('sliceCount').textContent=`Slices: ${items.length}`;
+
+  const rect=wheel.getBoundingClientRect();
+  const radius=rect.width/2;
+  const textDistance=radius*0.85;
+  let fontSize=14;
+  if(items.length>15) fontSize=Math.max(6,14-(items.length-15));
+
+  for(let i=0;i<items.length;i++){
+    const mid=i*sliceAngle+sliceAngle/2;
+    const label=document.createElement('div');
+    label.className='label';
+    label.style.transform=`rotate(${mid}deg) translate(${textDistance}px,0)`;
+    const span=document.createElement('span');
+    span.textContent=items[i];
+    span.style.fontSize=fontSize+'px';
+    span.style.color='white';
+    span.style.background='black';
+    span.style.padding='2px 6px';
+    span.style.borderRadius='4px';
+    span.style.display='inline-block';
+    span.style.transform='rotate(180deg)';
+    span.style.whiteSpace='nowrap';
+    label.appendChild(span);
+    wheel.appendChild(label);
+  }
+}
+
+function computeWinnerIndex(finalRotation){
+  if(!items.length) return -1;
+  const norm = ((-finalRotation)%360+360)%360;
+  const slice=360/items.length;
+  return Math.floor(norm/slice);
+}
+
+function spin(){
+  if(spinning||!items.length) return;
+  spinning=true;
+  resultDiv.textContent='Spinning…';
+  const rotations=(Math.random()*3+5)*360; // random fast spin
+  currentRotation-=rotations;
+  wheel.style.transition='transform 2s cubic-bezier(.33,1,.68,1)';
+  wheel.style.transform=`rotate(${currentRotation}deg)`;
+  setTimeout(()=>{
+    const winnerIndex=computeWinnerIndex(currentRotation);
+    if(winnerIndex>=0){
+      const winnerItem=items[winnerIndex];
+      resultDiv.textContent=`Winner: ${winnerItem}`;
+      if(confirm(`Winner is: ${winnerItem}\nRemove from list?`)){
+        items.splice(winnerIndex,1);
+        textarea.value=items.join('\n');
+        textarea.dispatchEvent(new Event('input'));
+      }
+    }else resultDiv.textContent='No items';
+    spinning=false;
+  },2000);
+}
+
+textarea.addEventListener('input',()=>{
+  items=textarea.value.split('\n').map(x=>x.trim()).filter(x=>x);
+  renderWheel();
+  resultDiv.textContent=items.length?'Ready':'No items';
+});
+plusBtn.addEventListener('click',()=>{
+  items.push(`Item ${items.length+1}`);
+  textarea.value=items.join('\n');textarea.dispatchEvent(new Event('input'));
+});
+minusBtn.addEventListener('click',()=>{
+  items.pop();textarea.value=items.join('\n');textarea.dispatchEvent(new Event('input'));
+});
+spinBtn.addEventListener('click',spin);
+clearBtn.addEventListener('click',()=>{
+  items=[];textarea.value='';renderWheel();resultDiv.textContent='No items';
+});
+randomBtn.addEventListener('click', ()=>{
+    // combine all movies from all genres
+    const allMovies = [].concat(...Object.values(movieDB));
+    // shuffle the array
+    const shuffled = allMovies.sort(() => Math.random() - 0.5);
+    // take 8 movies
+    items = shuffled.slice(0, 8);
+    textarea.value = items.join('\n');
+    textarea.dispatchEvent(new Event('input'));
+});
+
+
+genreBtns.forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const genre=btn.dataset.genre;
+    const shuffled=[...movieDB[genre]].sort(()=>Math.random()-0.5);
+    items=shuffled.slice(0,8);
+    textarea.value=items.join('\n');textarea.dispatchEvent(new Event('input'));
+  });
+});
+
+// initial setup
+textarea.dispatchEvent(new Event('input'));
+</script>
+</body>
+</html>
